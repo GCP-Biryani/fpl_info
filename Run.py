@@ -1,14 +1,17 @@
 import math
 import sys
 import logging
+import json
 
 import requests
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from prettytable import PrettyTable
+from tabulate import tabulate
 
 from MiniLeagues import *
+from variables import *
 
 BASE_URL = 'https://fantasy.premierleague.com/api/'
 
@@ -28,7 +31,39 @@ def get_fixture_data():
     '''get all gameweek info for a given player_id'''
     req_json = requests.get(BASE_URL + 'fixtures/').json()
     return pd.json_normalize(req_json)
+#=====================================
 
+def get_current_gw():
+    # print('Fetching curr gameweek...')
+    URL = "https://fantasy.premierleague.com/api/bootstrap-static/"
+    DATA = requests.get(URL).json()
+    CURR_GW_OBJS = [x for x in DATA['events'] if x['is_current'] == True]
+    if len(CURR_GW_OBJS) == 0:
+        CURR_GW_OBJS = DATA['events']        
+    CURR_GW = CURR_GW_OBJS[-1]['id']
+    return CURR_GW
+#=====================================
+
+def get_team(team_id):
+    gw = get_current_gw()
+    url = f"https://fantasy.premierleague.com/api/entry/{team_id}/event/{gw}/picks/"
+
+    # Send a GET request to fetch the data
+    response = requests.get(url)
+
+    if response.status_code == 200:
+        data = response.json()
+
+        # # Save the new JSON response to the file
+        # with open('team.json', "w") as json_file:
+        #     json.dump(data, json_file, indent=2)
+    # print(f"Data for team {team_id} in GW {gw} successfully saved")
+    picks = data.get("picks", [])
+    picks_df = pd.DataFrame(picks)
+    picks_df = picks_df['element'].to_list()
+    print (picks_df)
+    return picks_df
+    
 #=====================================
 # element options for global data:
 # teams = individual team data
@@ -38,9 +73,55 @@ def get_global_info(elements = 'teams'):
     '''get all team data'''
     req_json = requests.get(BASE_URL + 'bootstrap-static/').json()
     return pd.json_normalize(req_json[elements])
+#=====================================
+def get_my_team(team_id):
+    full_elements_df = get_global_info('elements')
+    full_elements_df = full_elements_df.astype({"form": float, "total_points": int})
+    full_elements_df.to_csv('full_elements_df.csv')
+    my_team = get_team(team_id)
+    df_filtered=full_elements_df[full_elements_df.id.isin(my_team)]
+    df_filtered.reset_index(drop=True, inplace=True)
+    df = df_filtered[['web_name','selected_by_percent','total_points','points_per_game','expected_goals_per_90','goals_scored','expected_assists_per_90','assists','expected_goal_involvements_per_90','clean_sheets']]
+    table = tabulate(df,headers=["Name",'selected_by_percent','total points', "PPG",'xG/90','goals','xA/90','asists','xGi/90','clean sheets','bonus'],tablefmt='fancy_grid')
+    text_file=open("team_id.csv","w")
+    text_file.write(table)
+    text_file.close()
+#=====================================
+def displayMyPlayers(team_id):
+    full_elements_df = get_global_info('elements')
+    full_elements_df = full_elements_df.astype({"form": float, "total_points": int})
+    plt.figure(figsize=(10,8))
+    fig, axs = plt.subplots(2,2,figsize=(10, 8))
+    fig.suptitle('Your team form')
+
+    # element_type: 0 = GKP, 1 = DEF, 2 = MID, 3 = FWD
+    for idx, element_type in enumerate(range(1,5)):
+        row = idx % 2
+        col = math.floor(idx/2)
+        my_team = get_team(team_id)
+        elements_df = full_elements_df[full_elements_df.element_type == element_type]
+        df_filtered=elements_df[elements_df.id.isin(my_team)]
+        # print (df_filtered)
+
+        for unused_idx, element in df_filtered.iterrows():
+            name = element['web_name']
+            scores = get_player_history(element['id'])['total_points'].to_list()
+            gwk = get_player_history(element['id'])['round'].to_list()
+            moving_avg = movingaverage(scores, min(3, len(scores)))
+            x = []
+            if len(scores) < 2:
+                x = gwk[-1]
+            else:
+                x = gwk[1:-1]
+            axs[row, col].plot(x, moving_avg, 'o-', label = name)
+
+        axs[row, col].legend(loc="upper left")
+        axs[row, col].set_xlabel('Gameweek')
+        axs[row, col].set_ylabel('Running Ava. Points')
+    plt.tight_layout()
+    plt.savefig('team_id.png')
 
 #=====================================
-
 def displayTopPlayers():
     full_elements_df = get_global_info('elements')
     full_elements_df = full_elements_df.astype({"form": float, "total_points": int})
@@ -54,7 +135,6 @@ def displayTopPlayers():
         col = math.floor(idx/2)
         elements_df = full_elements_df[full_elements_df.element_type == element_type]
         elements_df = elements_df.sort_values(by='form', ascending=False).head(10)
-
         for unused_idx, element in elements_df.iterrows():
             name = element['web_name']
             scores = get_player_history(element['id'])['total_points'].to_list()
@@ -71,7 +151,7 @@ def displayTopPlayers():
         axs[row, col].set_xlabel('Gameweek')
         axs[row, col].set_ylabel('Running Ava. Points')
     plt.tight_layout()
-    plt.savefig('Plot.png')
+    plt.savefig('public/Plot.png')
 
 #=====================================
 
@@ -109,13 +189,14 @@ def printTeamForm():
         row = [name, round(fixtures_df.tail(5).points.mean(),2), round(fixtures_df.tail(5).team_goals.mean(), 2), round(fixtures_df.points.mean(), 2), fixtures_df.clean_sheets.sum(), fixtures_df.did_team_score.sum()]
         x.add_row(row)
 
-    with open('index.html', 'r') as file :
+    with open('table.html', 'r') as file :
         filedata = file.read()
 
-    filedata = filedata.replace('HTML_TEAMTABLE', x.get_html_string(sortby='Goals Per Game [5]', reversesort=True))
-    filedata = filedata.replace('<table>', '<table class="styled-table">')
+    filedata = filedata.replace('TEAM_FORM', x.get_html_string(sortby='Goals Per Game [5]', reversesort=True))
+    filedata = filedata.replace('<table>', '<table class="sortable-theme-finder" data-sortable> <caption><h2>Team form (last 5 gameweeks)</h2><sup>Click on any column to sort</sup></caption>')
+    # filedata = filedata.replace('<table border="1" class="dataframe">', '<table class="sortable-theme-finder" data-sortable> <caption><h2>Team form (last 5 gameweeks)</h2></caption>')
 
-    with open('index.html', 'w') as file:
+    with open('public/team_form.html', 'w') as file:
         file.write(filedata)
 
 #=====================================
@@ -177,12 +258,12 @@ def showMiniLeague(mini_league_code):
 #=====================================
 
 def main():
-    logging.basicConfig(level=logging.INFO)
-    printDifficulties()
-    displayTopPlayers()
-    printTeamForm()
-    mini_league_code = 1
-    showMiniLeague(mini_league_code)
+    # displayMyPlayers(team_id)
+    get_my_team(team_id)
+    # printDifficulties()
+    # displayTopPlayers()
+    # printTeamForm()
+    # showMiniLeague(mini_league_code)
 
 #=====================================
 

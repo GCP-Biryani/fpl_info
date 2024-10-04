@@ -8,6 +8,13 @@ An attempt to show few FPL analytics data and mini league stats
 - Fixture difficulty (by next 3,5,10,remaining fixtures)
 - Team form (last 5 PPG, last 5 GPG, overall PPG, clean sheets)
 
+# your team stats
+```
+╒════════╤═══════════════════════╤════════════════╤═══════╤═════════╤═════════╤═════════╤══════════╤══════════╤════════════════╤═════════╕
+│   Name │ selected_by_percent   │   total points │   PPG │   xG/90 │   goals │   xA/90 │   asists │   xGi/90 │   clean sheets │   bonus │
+╞════════╪═══════════════════════╪════════════════╪═══════╪═════════╪═════════╪═════════╪══════════╪══════════╪════════════════╪═════════╡
+```
+
 # Mini league stats including bench points and transfers
 ```
 +----------------------+----------------------+--------------+----------------+-------------------+-----------+--------------+
@@ -31,8 +38,8 @@ source .venv/bin/activate
 ```
 pip install -r requirements.txt
 ```
-- update the mini league number
-update line #184 of Run.py
+- update variables 
+update variables in variables.py
 - Run the script 
 ```
 python ./Run.py

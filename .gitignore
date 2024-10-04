@@ -1,2 +1,6 @@
 .venv
 *pycache*
+team.json
+variables.py
+team_id.csv
+team_id.png
