@@ -258,12 +258,12 @@ def showMiniLeague(mini_league_code):
 #=====================================
 
 def main():
-    # displayMyPlayers(team_id)
+    displayMyPlayers(team_id)
     get_my_team(team_id)
-    # printDifficulties()
-    # displayTopPlayers()
-    # printTeamForm()
-    # showMiniLeague(mini_league_code)
+    printDifficulties()
+    displayTopPlayers()
+    printTeamForm()
+    showMiniLeague(mini_league_code)
 
 #=====================================
 
